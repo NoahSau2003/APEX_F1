@@ -1,4 +1,4 @@
-# Apex — F1 historical data & replay
+# APEX_F1 — F1 historical data & replay
 
 A local application for exploring real historical Formula 1 sessions: results, lap timing, car telemetry, race control, and a 3D replay of every car's recorded position on a circuit derived from the same session's data.
 
