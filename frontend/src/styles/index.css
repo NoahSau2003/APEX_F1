@@ -1,0 +1,200 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ */
+/* Design tokens. Every colour in the UI resolves to one of these.     */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+
+  --bg: #0b0c0e;
+  --surface: #111215;
+  --surface-2: #16171b;
+  --surface-3: #1c1e23;
+  --border: #22242a;
+  --border-strong: #2d3037;
+  --text: #ececee;
+  --text-2: #a3a6ae;
+  --text-3: #6d707a;
+
+  --accent: #e5383b;
+  --accent-hover: #f04a4d;
+  --accent-soft: rgb(229 56 59 / 0.12);
+
+  --good: #3fb37f;
+  --warn: #e0a52e;
+  --bad: #e5484d;
+  --info: #5b93f5;
+  --purple: #a66cf2;
+
+  --row-h: 30px;
+  --panel-pad: 14px;
+  --gap: 12px;
+}
+
+:root[data-theme='midnight'] {
+  --bg: #000000;
+  --surface: #08090a;
+  --surface-2: #0e0f11;
+  --surface-3: #15161a;
+  --border: #1b1c20;
+  --border-strong: #26282e;
+}
+
+:root[data-density='comfortable'] {
+  --row-h: 38px;
+  --panel-pad: 18px;
+  --gap: 16px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+  --color-purple: var(--purple);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --spacing-row: var(--row-h);
+  --spacing-pad: var(--panel-pad);
+  --spacing-gap: var(--gap);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection {
+    background: rgb(229 56 59 / 0.35);
+  }
+  :focus-visible {
+    outline: 2px solid var(--info);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+  button {
+    cursor: pointer;
+  }
+  /* Grid and flex children may shrink below their content (tables scroll inside). */
+  .grid > *,
+  .flex-col > * {
+    min-width: 0;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@layer utilities {
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum', 'cv11';
+  }
+  .label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+}
+
+/* Range input, styled once for the whole app. */
+input[type='range'].range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  width: 100%;
+}
+input[type='range'].range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--fill, 50%),
+    var(--border-strong) var(--fill, 50%)
+  );
+}
+input[type='range'].range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+input[type='range'].range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+input[type='range'].range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+input[type='range'].range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--surface);
+}
+
+/* Reduced motion: honour the in-app preference as well as the OS one. */
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200px 0;
+  }
+  to {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0, var(--surface-3) 40px, var(--surface-2) 80px);
+  background-size: 200px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+
+.recharts-wrapper,
+.recharts-surface {
+  outline: none;
+}
