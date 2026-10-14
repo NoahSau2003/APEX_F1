@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Check, RotateCcw, Server, ServerOff } from 'lucide-react';
 import { useQuery } from '@/hooks/useQuery';
 import { API_BASE_URL, api } from '@/services/api/client';
-import type { PredictionStage } from '@/demo/services/contracts';
+import type { PredictionStage } from '@/services/api/types';
 import { CAMERA_LABELS, DEFAULT_SETTINGS, resetSettings, updateSettings, useSettings, type CameraView, type Settings } from '@/state/settings';
 import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
@@ -85,8 +85,8 @@ export default function SettingsPage() {
         </Row>
       </Panel>
 
-      <Panel title="Predictions (illustrative demo)">
-        <Row label="Default prediction stage" description="Stage shown first on the Race Predictions page, which uses fictional demo data only.">
+      <Panel title="Predictions">
+        <Row label="Default prediction stage" description="Stage selected first on Race Predictions when it is available for the upcoming event.">
           <Choice k="predictionStage" label="Default prediction stage" options={STAGES.map((s: PredictionStage) => ({ value: s, label: STAGE_LABELS[s] }))} />
         </Row>
       </Panel>

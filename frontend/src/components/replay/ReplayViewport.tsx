@@ -1,6 +1,6 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Bug, Crosshair, Eye, Minus, Plus, RotateCcw, Tag } from 'lucide-react';
+import { Bug, Crosshair, Map, Minus, Plus, Rotate3d, RotateCcw, Tag } from 'lucide-react';
 import type { Driver, Track } from '@/services/api/types';
 import { createTransform, sceneBounds } from '@/replay/coordinates';
 import type { ReplayEngine } from '@/replay/engine';
@@ -61,8 +61,9 @@ export function ReplayViewport({ sessionId, track, drivers, engine, timing, sele
   const transform = useMemo(() => createTransform(track.centreline, track.rotation_deg), [track]);
   const bounds = useMemo(() => sceneBounds(transform, track.centreline), [transform, track]);
   const webgl = useMemo(webglAvailable, []);
+  const pixelRatio = useMemo(() => Math.min(2.5, typeof window !== 'undefined' ? window.devicePixelRatio : 1), []);
   const followIndex = drivers.findIndex((d) => d.driver_number === selected);
-  const effectiveMode: CameraView = mode === 'follow' && followIndex >= 0 ? 'follow' : 'overview';
+  const effectiveMode: CameraView = mode === 'follow' && followIndex >= 0 ? 'follow' : mode === 'orbit' ? 'orbit' : 'tracker';
 
   useEffect(() => setHovered(null), [sessionId]);
 
@@ -74,21 +75,22 @@ export function ReplayViewport({ sessionId, track, drivers, engine, timing, sele
     );
 
   return (
-    <div ref={container} className={cn('relative isolate min-h-0 overflow-hidden bg-bg', className)} onPointerLeave={() => setHovered(null)}>
+    <div
+      ref={container}
+      className={cn('relative isolate min-h-0 overflow-hidden bg-[#09090b]', className)}
+      style={{ background: 'radial-gradient(120% 85% at 50% 115%, rgb(88 28 28 / 0.22), #09090b 55%)' }}
+      onPointerLeave={() => setHovered(null)}
+    >
       <Boundary>
         <Canvas
-          dpr={[1, 2]}
-          gl={{ antialias: true }}
+          dpr={pixelRatio}
+          gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
           camera={{ fov: 36, near: 1, far: bounds.radius * 20, position: [bounds.cx, bounds.radius * 2.5, bounds.cz + bounds.radius] }}
           onPointerMissed={() => onSelect(null)}
           className="touch-none"
           aria-label="3D historical replay"
         >
-          <color attach="background" args={['#0b0c0e']} />
-          <mesh rotation-x={-Math.PI / 2} position={[bounds.cx, -0.5, bounds.cz]}>
-            <planeGeometry args={[bounds.radius * 12, bounds.radius * 12]} />
-            <meshBasicMaterial color="#101215" />
-          </mesh>
+          <color attach="background" args={['#09090b']} />
           <TrackMesh centreline={track.centreline} transform={transform} />
           {debug && <DebugLayer raw={track.debug_raw_points} centreline={track.centreline} transform={transform} />}
           <DriverDots
@@ -105,7 +107,15 @@ export function ReplayViewport({ sessionId, track, drivers, engine, timing, sele
         </Canvas>
       </Boundary>
 
-      <Labels frames={frames} drivers={drivers} selected={selected} hovered={hovered} all={allLabels} container={container} timing={timing} />
+      <Labels
+        frames={frames}
+        drivers={drivers}
+        selected={selected}
+        hovered={hovered}
+        all={allLabels || effectiveMode === 'tracker'}
+        container={container}
+        timing={timing}
+      />
 
       {hud && <div className="pointer-events-none absolute top-2.5 left-2.5 z-10 flex max-w-[70%] flex-col items-start gap-1.5 [&>*]:pointer-events-auto">{hud}</div>}
 
@@ -114,11 +124,15 @@ export function ReplayViewport({ sessionId, track, drivers, engine, timing, sele
           <Segmented
             label="Camera"
             size="xs"
-            value={effectiveMode}
-            onChange={setMode}
+            value={mode === 'follow' && followIndex < 0 ? 'tracker' : mode}
+            onChange={(v) => {
+              setMode(v);
+              updateSettings({ cameraView: v });
+            }}
             className="border-0 bg-transparent p-0"
             options={[
-              { value: 'overview', label: <Eye />, title: 'Overview camera — orbit, pan, zoom' },
+              { value: 'tracker', label: <Map />, title: 'Driver tracker — top-down by default; drag to orbit, pan, zoom' },
+              { value: 'orbit', label: <Rotate3d />, title: '3D orbit camera' },
               { value: 'follow', label: <Crosshair />, title: selected ? 'Follow the selected driver' : 'Select a driver to follow', disabled: !selected },
             ]}
           />
@@ -198,7 +212,7 @@ function Labels({
         const show = !!s && (all || d.driver_number === selected || d.driver_number === hovered);
         if (el) {
           el.style.display = show ? '' : 'none';
-          if (s) el.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px)`;
+          if (s) el.style.transform = `translate(${Math.round(s.x + 10)}px, ${Math.round(s.y)}px)`;
         }
         if (tip.current && d.driver_number === hovered) {
           if (!s) tip.current.style.display = 'none';
@@ -228,12 +242,19 @@ function Labels({
       {drivers.map((d, i) => {
         const sel = d.driver_number === selected;
         return (
-          <div key={d.driver_number} ref={(el) => void (chips.current[i] = el)} className="absolute top-0 left-0" style={{ display: 'none' }}>
+          <div
+            key={d.driver_number}
+            ref={(el) => void (chips.current[i] = el)}
+            className={cn('absolute top-0 left-0 flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap', sel && 'z-10')}
+            style={{ display: 'none' }}
+          >
             <span
-              className={cn(
-                'absolute -translate-x-1/2 -translate-y-[calc(100%+9px)] rounded-[3px] border px-1 font-mono text-[10.5px] leading-4 font-semibold whitespace-nowrap shadow-md',
-                sel ? 'border-white/70 bg-white text-black' : 'border-black/50 bg-[#0d0e10]/90 text-white',
-              )}
+              className={cn('size-3 shrink-0 rounded-full ring-[1.5px]', sel ? 'ring-white' : 'ring-white/95')}
+              style={{ background: d.team_color, boxShadow: '0 0 0 1px rgb(0 0 0 / 0.8)' }}
+            />
+            <span
+              className="font-sans text-[11px] font-extrabold tracking-[0.08em] text-white uppercase"
+              style={{ textShadow: '0 1px 0 #000, 0 0 2px rgb(0 0 0 / 0.9)' }}
             >
               {d.abbreviation ?? d.driver_number}
             </span>

@@ -1,4 +1,4 @@
-import type { PredictionStage } from '@/demo/services/contracts';
+import type { PredictionStage } from '@/services/api/types';
 
 export const STAGE_LABELS: Record<PredictionStage, string> = {
   'pre-qualifying': 'Pre-qualifying',

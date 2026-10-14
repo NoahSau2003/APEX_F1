@@ -317,3 +317,75 @@ export interface Health {
   fastf1_version: string;
   cache_dir: string;
 }
+
+export type PredictionStage = 'pre-qualifying' | 'post-qualifying' | 'pre-race';
+
+export interface UpcomingRace {
+  event_id: string;
+  meeting_key: number | null;
+  year: number;
+  round: number;
+  name: string;
+  official_name?: string | null;
+  country?: string | null;
+  location?: string | null;
+  circuit?: string | null;
+  race_start_utc: string;
+  format?: string | null;
+  stages: Record<PredictionStage, boolean>;
+  calendar_source?: string | null;
+}
+
+export interface UpcomingRacesResponse {
+  fetched_at: string;
+  server_time_utc: string;
+  races: UpcomingRace[];
+}
+
+export interface PredictionExplanation {
+  feature: string;
+  label: string;
+  value: number;
+  lower_is_better: boolean;
+}
+
+export interface DriverPredictionRow {
+  driver_id: string;
+  code: string | null;
+  given_name: string;
+  family_name: string;
+  constructor_id: string;
+  constructor: string;
+  team_color: string | null;
+  predicted_position: number;
+  expected_position: number;
+  win_probability: number;
+  podium_probability: number;
+  top10_probability: number;
+  explanation: PredictionExplanation[];
+  features?: Record<string, number>;
+}
+
+export interface ForecastSnapshot {
+  snapshot_id: string;
+  event_id: string;
+  stage: PredictionStage;
+  generated_at: string;
+  cutoff_utc: string;
+  model: { name: string; version: string };
+  grid_source: string;
+  drivers: DriverPredictionRow[];
+  weather: Record<string, unknown>;
+  news: { items: (NewsItem & { relevance_score?: number; used_in_model?: boolean; context_only?: boolean })[]; fetched_at?: string };
+  warnings: string[];
+  sources: Record<string, unknown>;
+  feature_names?: string[];
+}
+
+export interface PredictionModelInfo {
+  model: { name: string; version: string };
+  features: string[];
+  evaluation: Record<string, unknown>;
+  baselines: Record<string, unknown>;
+  notes: string[];
+}

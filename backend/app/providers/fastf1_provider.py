@@ -43,10 +43,10 @@ def _lock(key: tuple) -> threading.Lock:
         return _locks.setdefault(key, threading.Lock())
 
 
-def load_session(year: int, round_number: int, session_name: str) -> fastf1.core.Session:
+def load_session(year: int, round_number: int, session_name: str, *, laps_only: bool = False) -> fastf1.core.Session:
     """Fully load one session. Concurrent callers for the same session share one load."""
     _ensure_cache()
-    key = (year, round_number, session_name)
+    key: tuple = (year, round_number, session_name, laps_only)
     with _lock(key):
         if key in _loaded:
             _loaded.move_to_end(key)
@@ -54,7 +54,10 @@ def load_session(year: int, round_number: int, session_name: str) -> fastf1.core
         log.info("Loading %s from FastF1", key)
         try:
             s = fastf1.get_session(year, round_number, session_name)
-            s.load(laps=True, telemetry=True, weather=True, messages=True)
+            if laps_only:
+                s.load(laps=True, telemetry=False, weather=False, messages=False)
+            else:
+                s.load(laps=True, telemetry=True, weather=True, messages=True)
         except Exception as e:
             raise UpstreamError(f"FastF1 could not load {year} round {round_number} {session_name}: {e}") from e
         if s.laps is None or len(s.results) == 0:

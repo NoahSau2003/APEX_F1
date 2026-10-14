@@ -1,10 +1,14 @@
-import type { PredictionStage } from '@/demo/services/contracts';
+import type { PredictionStage } from '@/services/api/types';
 import { createStore, useStore } from './store';
 
 export type TelemetryUnits = 'metric' | 'imperial';
-export type CameraView = 'overview' | 'follow';
+export type CameraView = 'tracker' | 'orbit' | 'follow';
 
-export const CAMERA_LABELS: Record<CameraView, string> = { overview: 'Overview', follow: 'Follow driver' };
+export const CAMERA_LABELS: Record<CameraView, string> = {
+  tracker: 'Driver tracker (top-down map)',
+  orbit: '3D orbit',
+  follow: 'Follow driver',
+};
 
 export interface Settings {
   theme: 'dark' | 'midnight';
@@ -25,7 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   density: 'compact',
   motion: 'system',
-  cameraView: 'overview',
+  cameraView: 'tracker',
   predictionStage: 'pre-race',
   units: 'metric',
   sidebar: 'auto',
@@ -39,7 +43,7 @@ const ALLOWED: Partial<Record<keyof Settings, readonly unknown[]>> = {
   theme: ['dark', 'midnight'],
   density: ['compact', 'comfortable'],
   motion: ['system', 'full', 'reduced'],
-  cameraView: ['overview', 'follow'],
+  cameraView: ['tracker', 'orbit', 'follow'],
   predictionStage: ['pre-qualifying', 'post-qualifying', 'pre-race'],
   units: ['metric', 'imperial'],
   sidebar: ['auto', 'expanded', 'collapsed'],
@@ -58,6 +62,7 @@ function load(): Settings {
       const allowed = ALLOWED[k];
       if (parsed[k] !== undefined && typeof parsed[k] === typeof DEFAULT_SETTINGS[k] && (!allowed || allowed.includes(parsed[k]))) (merged as Record<string, unknown>)[k] = parsed[k];
     }
+    if ((parsed as { cameraView?: string }).cameraView === 'overview') merged.cameraView = 'tracker';
     return merged;
   } catch {
     return DEFAULT_SETTINGS;

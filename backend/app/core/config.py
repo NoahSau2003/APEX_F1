@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     location_chunk_s: int = 600
     # Loaded FastF1 sessions are large; keep only a few in memory.
     max_loaded_sessions: int = 2
+    # If true, train/select the prediction model on startup when no champion is cached.
+    prediction_pretrain_on_startup: bool = True
 
     @property
     def fastf1_cache_dir(self) -> Path:

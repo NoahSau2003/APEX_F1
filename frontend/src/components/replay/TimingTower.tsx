@@ -63,14 +63,14 @@ export function TimingTower({ rows, drivers, selected, onSelect, mode, race, cla
                   {r.out
                     ? ''
                     : race
-                    ? r.position === 1
-                      ? <span className="text-fg-3">Leader</span>
-                      : r.lapsDown > 0 && mode === 'gap'
-                        ? `+${r.lapsDown} lap${r.lapsDown > 1 ? 's' : ''}`
-                        : v != null
-                          ? `+${v.toFixed(3)}`
-                          : '—'
-                    : formatLapTime(r.bestLapTime)}
+                      ? r.position === 1
+                        ? <span className="text-fg-3">Leader</span>
+                        : r.lapsDown > 0 && mode === 'gap'
+                          ? `+${r.lapsDown} lap${r.lapsDown > 1 ? 's' : ''}`
+                          : v != null
+                            ? `+${v.toFixed(3)}`
+                            : '—'
+                      : formatLapTime(r.bestLapTime)}
                 </td>
                 <td className="num px-2 text-right">{formatLapTime(r.lastLap?.lap_time)}</td>
                 <td className="pr-pad">

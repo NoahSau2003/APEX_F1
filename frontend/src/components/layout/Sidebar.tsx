@@ -62,7 +62,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
 function DemoNote({ collapsed }: { collapsed: boolean }) {
   if (collapsed)
     return (
-      <div className="flex justify-center border-t border-line py-3 text-info" title="Historical data from FastF1, OpenF1 and Jolpica-F1, cached locally. Predictions are illustrative demo calculations.">
+      <div className="flex justify-center border-t border-line py-3 text-info" title="Historical data from FastF1, OpenF1 and Jolpica-F1, cached locally. Predictions use a local model on Jolpica results.">
         <Database className="size-4" />
       </div>
     );

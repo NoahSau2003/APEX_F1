@@ -23,24 +23,29 @@ export interface CameraApi {
 }
 
 const TRACK_HALF_WIDTH = 7;
-const DOT_PX = 6.5;
+const DOT_PX = 7;
+const MARKER_LIFT = 0.14;
 const _v = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
 const _s = new THREE.Vector3();
 const _c = new THREE.Color();
-const BG = new THREE.Color('#0b0c0e');
+const BG = new THREE.Color('#09090b');
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
-/** Ribbon, edges, start line and direction chevrons from the derived centreline. */
+/** Four parallel rails (broadcast-style circuit outline), crisp opaque lines. */
+const TRACK = {
+  rails: ['#eceef2', '#c4c9d4', '#9ca3af', '#6b7280'] as const,
+  start: '#f9fafb',
+} as const;
+const RAIL_FRAC = [0.78, 0.28, -0.28, -0.78] as const;
+
+/** Parallel rail lines and start line from the derived centreline. */
 export function TrackMesh({ centreline, transform }: { centreline: [number, number][]; transform: Transform }) {
   const geo = useMemo(() => {
     const n = centreline.length;
     const pts = centreline.map(([x, y]) => metresToScene(transform, x, y));
-    const left: number[] = [];
-    const right: number[] = [];
-    const ribbon: number[] = [];
-    const idx: number[] = [];
+    const rails: number[][] = RAIL_FRAC.map(() => []);
     const normals: { nx: number; nz: number }[] = [];
     for (let i = 0; i < n; i++) {
       const a = pts[(i - 1 + n) % n];
@@ -52,72 +57,47 @@ export function TrackMesh({ centreline, transform }: { centreline: [number, numb
     }
     pts.forEach((p, i) => {
       const { nx, nz } = normals[i];
-      ribbon.push(p.x + nx * TRACK_HALF_WIDTH, 0, p.z + nz * TRACK_HALF_WIDTH, p.x - nx * TRACK_HALF_WIDTH, 0, p.z - nz * TRACK_HALF_WIDTH);
-      left.push(p.x + nx * TRACK_HALF_WIDTH, 0.05, p.z + nz * TRACK_HALF_WIDTH);
-      right.push(p.x - nx * TRACK_HALF_WIDTH, 0.05, p.z - nz * TRACK_HALF_WIDTH);
-      const j = (i + 1) % n;
-      idx.push(2 * i, 2 * j, 2 * i + 1, 2 * i + 1, 2 * j, 2 * j + 1);
+      RAIL_FRAC.forEach((frac, ri) => {
+        const w = TRACK_HALF_WIDTH * frac;
+        rails[ri].push(p.x + nx * w, 0.06, p.z + nz * w);
+      });
     });
-    const road = new THREE.BufferGeometry();
-    road.setAttribute('position', new THREE.Float32BufferAttribute(ribbon, 3));
-    road.setIndex(idx);
-    const edge = (arr: number[]) => {
+    const loop = (arr: number[]) => {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute([...arr, arr[0], arr[1], arr[2]], 3));
       return g;
     };
-    // Chevrons every ~1/24 of the lap, pointing in the recorded direction of travel.
-    const chev: number[] = [];
-    const step = Math.max(1, Math.round(n / 24));
-    for (let i = step; i < n; i += step) {
-      const p = pts[i];
-      const q = pts[(i + 2) % n];
-      const dx = q.x - p.x;
-      const dz = q.z - p.z;
-      const l = Math.hypot(dx, dz) || 1;
-      const fx = dx / l;
-      const fz = dz / l;
-      const s = 4;
-      chev.push(p.x - fx * s + fz * s, 0.06, p.z - fz * s - fx * s, p.x + fx * s, 0.06, p.z + fz * s, p.x - fx * s - fz * s, 0.06, p.z - fz * s + fx * s);
-    }
-    const chevrons = new THREE.BufferGeometry();
-    chevrons.setAttribute('position', new THREE.Float32BufferAttribute(chev, 3));
     const { nx, nz } = normals[0];
     const p0 = pts[0];
     const start = new THREE.BufferGeometry();
-    start.setAttribute('position', new THREE.Float32BufferAttribute([p0.x + nx * (TRACK_HALF_WIDTH + 3), 0.07, p0.z + nz * (TRACK_HALF_WIDTH + 3), p0.x - nx * (TRACK_HALF_WIDTH + 3), 0.07, p0.z - nz * (TRACK_HALF_WIDTH + 3)], 3));
-    const edgeMat = new THREE.LineBasicMaterial({ color: '#5d6168' });
+    start.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [p0.x + nx * (TRACK_HALF_WIDTH + 2.5), 0.07, p0.z + nz * (TRACK_HALF_WIDTH + 2.5), p0.x - nx * (TRACK_HALF_WIDTH + 2.5), 0.07, p0.z - nz * (TRACK_HALF_WIDTH + 2.5)],
+        3,
+      ),
+    );
     return {
-      road,
-      chevrons,
       start,
-      edges: [new THREE.Line(edge(left), edgeMat), new THREE.Line(edge(right), edgeMat)],
+      lines: rails.map((rail, i) => new THREE.Line(loop(rail), new THREE.LineBasicMaterial({ color: TRACK.rails[i] }))),
     };
   }, [centreline, transform]);
 
   useEffect(
     () => () => {
-      geo.road.dispose();
-      geo.chevrons.dispose();
       geo.start.dispose();
-      geo.edges.forEach((l) => (l.geometry.dispose(), (l.material as THREE.Material).dispose()));
+      geo.lines.forEach((l) => (l.geometry.dispose(), (l.material as THREE.Material).dispose()));
     },
     [geo],
   );
 
   return (
     <group>
-      <mesh geometry={geo.road}>
-        <meshBasicMaterial color="#2c2f36" side={THREE.DoubleSide} />
-      </mesh>
-      {geo.edges.map((l, i) => (
+      {geo.lines.map((l, i) => (
         <primitive key={i} object={l} />
       ))}
-      <mesh geometry={geo.chevrons}>
-        <meshBasicMaterial color="#4a4e57" side={THREE.DoubleSide} />
-      </mesh>
       <lineSegments geometry={geo.start}>
-        <lineBasicMaterial color="#ececee" linewidth={2} />
+        <lineBasicMaterial color={TRACK.start} />
       </lineSegments>
     </group>
   );
@@ -171,7 +151,7 @@ interface DotsProps {
   frames: RefObject<MarkerFrame[]>;
 }
 
-/** One flat dot per driver at its recorded (or render-interpolated) position. */
+/** Broadcast-style flat markers on the racing line (F1 driver tracker look). */
 export function DriverDots({ engine, drivers, transform, selected, hovered, onHover, onSelect, frames }: DotsProps) {
   const fill = useRef<THREE.InstancedMesh>(null);
   const ring = useRef<THREE.InstancedMesh>(null);
@@ -179,8 +159,18 @@ export function DriverDots({ engine, drivers, transform, selected, hovered, onHo
   const size = useThree((s) => s.size);
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
   const count = drivers.length;
-  const disc = useMemo(() => new THREE.CircleGeometry(1, 28), []);
-  useEffect(() => () => disc.dispose(), [disc]);
+  const geos = useMemo(() => {
+    const fillGeo = new THREE.CircleGeometry(0.84, 40);
+    const ringGeo = new THREE.RingGeometry(0.84, 1, 40);
+    return { fillGeo, ringGeo };
+  }, []);
+  useEffect(
+    () => () => {
+      geos.fillGeo.dispose();
+      geos.ringGeo.dispose();
+    },
+    [geos],
+  );
 
   useLayoutEffect(() => {
     frames.current = drivers.map((d) => ({ driver: d.driver_number, state: { kind: 'no-data' }, world: null, screen: null }));
@@ -223,19 +213,19 @@ export function DriverDots({ engine, drivers, transform, selected, hovered, onHo
         fr.screen = null;
         return;
       }
-      const emph = d.driver_number === selected ? 1.45 : d.driver_number === hovered ? 1.3 : 1;
-      const rad = DOT_PX * worldPerPx * emph;
-      const lift = d.driver_number === selected ? 0.4 : d.driver_number === hovered ? 0.3 : 0.2 + i * 0.002;
+      // Fixed screen size for every driver — selection only changes ring colour, not position or scale.
+      const rad = DOT_PX * worldPerPx;
+      const lift = MARKER_LIFT + i * 0.0008;
       _v.set(x, lift, y);
       _m.compose(_v, _q, _s.setScalar(rad));
       f.setMatrixAt(i, _m);
-      _v.y = lift - 0.05;
-      _m.compose(_v, _q, _s.setScalar(rad * (d.driver_number === selected ? 1.45 : 1.3)));
+      _m.compose(_v, _q, _s.setScalar(rad * 1.12));
       r.setMatrixAt(i, _m);
       _c.set(d.team_color);
-      if (dim || (state.kind === 'ok' && !state.onTrack)) _c.lerp(BG, 0.6);
+      if (dim || (state.kind === 'ok' && !state.onTrack)) _c.lerp(BG, 0.4);
       f.setColorAt(i, _c);
-      _c.set(d.driver_number === selected ? '#ffffff' : '#0b0c0e');
+      _c.set(d.driver_number === selected ? '#ffffff' : '#f1f5f9');
+      if (dim) _c.lerp(BG, 0.35);
       r.setColorAt(i, _c);
       fr.world = (fr.world ?? new THREE.Vector3()).set(x, lift, y);
       _v.set(x, lift, y).project(camera);
@@ -252,13 +242,14 @@ export function DriverDots({ engine, drivers, transform, selected, hovered, onHo
 
   return (
     <group>
-      <instancedMesh ref={ring} args={[disc, undefined, count]} frustumCulled={false}>
-        <meshBasicMaterial color="#ffffff" />
+      <instancedMesh ref={ring} args={[geos.ringGeo, undefined, count]} frustumCulled={false} renderOrder={1}>
+        <meshBasicMaterial />
       </instancedMesh>
       <instancedMesh
         ref={fill}
-        args={[disc, undefined, count]}
+        args={[geos.fillGeo, undefined, count]}
         frustumCulled={false}
+        renderOrder={2}
         onPointerMove={(e) => {
           e.stopPropagation();
           const d = id(e);
@@ -271,7 +262,7 @@ export function DriverDots({ engine, drivers, transform, selected, hovered, onHo
           if (d) onSelect(d);
         }}
       >
-        <meshBasicMaterial color="#ffffff" />
+        <meshBasicMaterial />
       </instancedMesh>
     </group>
   );
@@ -287,7 +278,7 @@ interface RigProps {
   sessionId: string;
 }
 
-/** Overview (free orbit, framed to the circuit) and follow (orbit locked to the selected dot). */
+/** F1-style top-down tracker map, free 3D orbit, or follow the selected driver. */
 export function CameraRig({ mode, radius, centre, followIndex, frames, apiRef, sessionId }: RigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -298,16 +289,19 @@ export function CameraRig({ mode, radius, centre, followIndex, frames, apiRef, s
   const home = () => {
     const fov = (camera.fov * Math.PI) / 180;
     const aspect = size.width / Math.max(1, size.height);
-    const dist = (radius / Math.tan(fov / 2)) * Math.max(1.12, 1.22 / aspect);
-    const dir = new THREE.Vector3(0, 1, 0.42).normalize();
+    const dist = (radius / Math.tan(fov / 2)) * Math.max(1.05, mode === 'tracker' ? 1.08 / aspect : 1.22 / aspect);
     const target = new THREE.Vector3(centre.x, 0, centre.z);
+    if (mode === 'tracker') {
+      return { pos: new THREE.Vector3(centre.x, dist, centre.z), target };
+    }
+    const dir = new THREE.Vector3(0, 1, 0.42).normalize();
     return { pos: target.clone().addScaledVector(dir, dist), target };
   };
 
   const followTarget = () => frames.current?.[followIndex]?.world ?? null;
 
   useEffect(() => {
-    if (mode !== 'overview' || touched.current) return;
+    if (mode === 'follow' || touched.current) return;
     const h = home();
     camera.position.copy(h.pos);
     camera.far = radius * 20;
@@ -315,15 +309,20 @@ export function CameraRig({ mode, radius, centre, followIndex, frames, apiRef, s
     controls.current?.target.copy(h.target);
     controls.current?.update();
     fly.current = null;
-  }, [size.width, size.height, radius, centre.x, centre.z, sessionId]);
+  }, [size.width, size.height, radius, centre.x, centre.z, sessionId, mode]);
 
+  /** Reframe only when the camera mode changes — not when the selected driver changes. */
   useEffect(() => {
     touched.current = false;
-    if (mode === 'overview') fly.current = home();
-    else {
-      const w = followTarget();
-      if (w) fly.current = { pos: w.clone().add(new THREE.Vector3(0, radius * 0.35, radius * 0.25)), target: w.clone() };
-    }
+    if (mode === 'tracker' || mode === 'orbit') fly.current = home();
+  }, [mode]);
+
+  /** In follow mode, snap to the selected driver when entering follow or picking another driver. */
+  useEffect(() => {
+    if (mode !== 'follow') return;
+    const w = followTarget();
+    if (!w) return;
+    fly.current = { pos: w.clone().add(new THREE.Vector3(0, radius * 0.35, radius * 0.25)), target: w.clone() };
   }, [mode, followIndex]);
 
   apiRef.current = {
@@ -367,17 +366,21 @@ export function CameraRig({ mode, radius, centre, followIndex, frames, apiRef, s
     c.update();
   });
 
+  const tracker = mode === 'tracker';
+
   return (
     <OrbitControls
       ref={controls}
       makeDefault
       enableDamping
       dampingFactor={0.12}
-      enablePan={mode === 'overview'}
-      minDistance={40}
+      enableRotate
+      enablePan
+      minDistance={tracker ? radius * 0.35 : 40}
       maxDistance={radius * 8}
-      maxPolarAngle={Math.PI * 0.47}
-      screenSpacePanning={false}
+      minPolarAngle={0.08}
+      maxPolarAngle={Math.PI * 0.48}
+      screenSpacePanning
       onStart={() => {
         touched.current = true;
         fly.current = null;

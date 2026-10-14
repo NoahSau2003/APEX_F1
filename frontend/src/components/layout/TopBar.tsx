@@ -158,7 +158,7 @@ function DataStatus() {
             <dt className="text-fg-3">News</dt>
             <dd>Public RSS feeds</dd>
             <dt className="text-fg-3">Predictions</dt>
-            <dd>Illustrative demo only</dd>
+            <dd>Local scikit-learn on Jolpica history</dd>
           </dl>
           {!ok && (
             <Button size="sm" onClick={health.retry}>

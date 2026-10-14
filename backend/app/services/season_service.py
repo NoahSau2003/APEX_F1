@@ -92,6 +92,56 @@ def results(year: int) -> dict:
     return {"year": year, "races": _cached(f"{year}/results", year, build), "source": JOLPICA_SOURCE}
 
 
+def qualifying(year: int) -> dict:
+    if year not in catalog_service.seasons():
+        raise NotFound(f"Season {year} is not supported")
+
+    def build():
+        races = _merge_races(_paged(f"{year}/qualifying", "RaceTable", "Races"), "QualifyingResults")
+        out = []
+        for rnd in sorted(races):
+            race = races[rnd]
+            out.append(
+                {
+                    "round": rnd,
+                    "name": race["raceName"],
+                    "circuit": race["Circuit"]["circuitName"],
+                    "results": [_qual_row(x) for x in race["QualifyingResults"]],
+                }
+            )
+        return out
+
+    return {"year": year, "races": _cached(f"{year}/qualifying", year, build), "source": JOLPICA_SOURCE}
+
+
+def _qual_time(v) -> str | None:
+    if v is None:
+        return None
+    if isinstance(v, dict):
+        return v.get("time")
+    if isinstance(v, str):
+        return v
+    return None
+
+
+def _qual_row(x: dict) -> dict:
+    d = x["Driver"]
+    c = x["Constructor"]
+    return {
+        "position": int(x["position"]),
+        "driver_id": d["driverId"],
+        "code": d.get("code"),
+        "number": x.get("number"),
+        "given_name": d["givenName"],
+        "family_name": d["familyName"],
+        "constructor_id": c["constructorId"],
+        "constructor": c["name"],
+        "q1": _qual_time(x.get("Q1")),
+        "q2": _qual_time(x.get("Q2")),
+        "q3": _qual_time(x.get("Q3")),
+    }
+
+
 def _row(x: dict) -> dict:
     d = x["Driver"]
     c = x["Constructor"]

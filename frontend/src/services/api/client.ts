@@ -1,11 +1,14 @@
 import type {
   Dataset,
   Driver,
+  ForecastSnapshot,
   Health,
   Lap,
   LocationWindow,
   Meeting,
   News,
+  PredictionModelInfo,
+  PredictionStage,
   PitStop,
   RaceControlRow,
   ResultRow,
@@ -17,6 +20,7 @@ import type {
   Telemetry,
   Track,
   TrackStatusRow,
+  UpcomingRacesResponse,
   WeatherRow,
 } from './types';
 
@@ -25,6 +29,16 @@ import type {
  * OpenF1 or Jolpica directly.
  */
 export const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8000/api/v1';
+
+/** Supports absolute bases (local dev) and path-only bases (Docker nginx on the same origin). */
+function buildRequestUrl(path: string): URL {
+  const target = `${API_BASE_URL}${path}`;
+  if (/^https?:\/\//i.test(API_BASE_URL)) {
+    return new URL(target);
+  }
+  const origin = typeof globalThis.location !== 'undefined' ? globalThis.location.origin : 'http://localhost';
+  return new URL(target, origin);
+}
 
 export class ApiError extends Error {
   constructor(
@@ -37,16 +51,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, params?: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<T> {
-  const url = new URL(`${API_BASE_URL}${path}`);
-  for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
-  let res: Response;
-  try {
-    res = await fetch(url, { signal });
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError(`Cannot reach the Apex backend at ${API_BASE_URL}. Is it running?`, 'backend_unreachable', 0);
-  }
+async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let body: { error?: { code: string; message: string }; detail?: unknown } = {};
     try {
@@ -57,6 +62,31 @@ async function request<T>(path: string, params?: Record<string, string | number 
     throw new ApiError(body.error?.message ?? `Request failed (${res.status})`, body.error?.code ?? 'http_error', res.status);
   }
   return res.json() as Promise<T>;
+}
+
+async function request<T>(path: string, params?: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<T> {
+  const url = buildRequestUrl(path);
+  for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+  let res: Response;
+  try {
+    res = await fetch(url, { signal });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    throw new ApiError(`Cannot reach the Apex backend at ${API_BASE_URL}. Is it running?`, 'backend_unreachable', 0);
+  }
+  return parseResponse<T>(res);
+}
+
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const url = buildRequestUrl(path);
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    throw new ApiError(`Cannot reach the Apex backend at ${API_BASE_URL}. Is it running?`, 'backend_unreachable', 0);
+  }
+  return parseResponse<T>(res);
 }
 
 const s = (id: string) => `/sessions/${encodeURIComponent(id)}`;
@@ -82,4 +112,11 @@ export const api = {
   standings: (year: number) => request<Standings>(`/seasons/${year}/standings`),
   teamColors: (year: number) => request<TeamColors>(`/seasons/${year}/team-colors`),
   news: () => request<News>('/news'),
+  upcomingRaces: (refresh?: boolean) => request<UpcomingRacesResponse>('/predictions/upcoming-races', { refresh: refresh ? 1 : undefined }),
+  predictionAvailability: (eventId: string) => request<{ event_id: string; stages: Record<PredictionStage, boolean> }>(`/predictions/upcoming-races/${encodeURIComponent(eventId)}/availability`),
+  predictRace: (eventId: string, stage: PredictionStage, signal?: AbortSignal) =>
+    post<ForecastSnapshot>(`/predictions/upcoming-races/${encodeURIComponent(eventId)}/predict`, { stage }, signal),
+  predictionHistory: (eventId: string) => request<{ event_id: string; snapshots: ForecastSnapshot[] }>(`/predictions/upcoming-races/${encodeURIComponent(eventId)}/history`),
+  predictionModelInfo: () => request<PredictionModelInfo>('/predictions/model-info'),
+  predictionEvaluation: () => request<Record<string, unknown>>('/predictions/evaluation'),
 };

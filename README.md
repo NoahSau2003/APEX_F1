@@ -2,7 +2,7 @@
 
 A local application for exploring real historical Formula 1 sessions: results, lap timing, car telemetry, race control, and a 3D replay of every car's recorded position on a circuit derived from the same session's data.
 
-Everything runs on your machine and uses free data sources only. No accounts, API keys, paid services or cloud infrastructure. **No live data and no machine learning** in this milestone.
+Everything runs on your machine and uses free data sources only. No accounts, API keys, paid services or cloud infrastructure. **No live timing.** Race Predictions trains a local scikit-learn model on cached Jolpica historical results and forecasts **upcoming** Grands Prix only.
 
 ```
 F1Application/
@@ -44,6 +44,26 @@ npm run dev
 
 The first time a session is opened, the backend downloads it with FastF1 and processes it (typically 15–40 s; the app shows a "Preparing…" state). Afterwards it is served from the local cache in `backend/data/` (about 5–10 MB per race).
 
+### Docker (optional)
+
+Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose v2).
+
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+| | URL |
+|---|---|
+| App | http://localhost:8080 |
+| API (direct) | http://localhost:8000/api/v1 |
+| API docs | http://localhost:8080/docs |
+
+The UI is nginx serving the production frontend build; `/api` is proxied to the backend container. Session caches live in the Docker volume `apex-data` (not your local `backend/data/` folder). To wipe the cache: `docker compose down -v`.
+
+Stop with `Ctrl+C`, or run detached: `docker compose up --build -d`.
+
 ## Tests
 
 ```bash
@@ -58,7 +78,8 @@ cd frontend && npm test && npm run build                           # 16 replay/c
 | [FastF1](https://docs.fastf1.dev/) (MIT) reading the Formula 1 live-timing archive | Schedules, session results, laps, sectors, tyres, **position samples**, **car telemetry**, weather, race control, track status, team colours, circuit corner markers/rotation (MultiViewer) | Free, no key | Detailed timing from 2018. FastF1 caches downloads in `backend/data/fastf1-cache`. |
 | [OpenF1](https://openf1.org/docs/) historical API | Session keys (2023+), pit-lane and stationary times | Free for historical data, no key | Real-time data requires a paid subscription and is **not used**. Coverage starts in 2023. |
 | [Jolpica-F1](https://github.com/jolpica/jolpica-f1) (Ergast-compatible) | Season race/sprint results and official standings | Free, rate-limited (the backend paces requests) | Community-run successor of the Ergast API. |
-| Public RSS: Formula1.com, Motorsport.com, BBC Sport, The Race | Technical Intelligence headlines | Public feeds | Only headline, short summary, date and link are shown; articles belong to their publishers. |
+| Public RSS: Formula1.com, Motorsport.com, BBC Sport, The Race | Technical Intelligence & prediction news context | Public feeds | Only headline, short summary, date and link are shown; articles belong to their publishers. |
+| [Open-Meteo](https://open-meteo.com/) | Race-start weather **forecast** (Predictions) | Free, no key | Forecast only; unavailable beyond ~16 days ahead. |
 
 This project is unofficial and is not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trademarks of Formula One Licensing B.V. Timing data is the property of its rights holders and is used here for personal, non-commercial analysis.
 
@@ -70,7 +91,17 @@ Sessions and meetings use the **official F1 live-timing keys**, which are the sa
 
 - Every dataset response includes `source` (provider, whether the value is **calculated**, formula note) and `cache` (served from the local processed cache, with processing time). The UI shows this as a source badge.
 - Calculated values are labelled: gaps/intervals in the timing tower (difference of line-crossing times), practice classification (ranked by fastest lap), season points totals, averages, places gained, race pace, pit-lane time before 2023 (next lap's `PitOutTime − PitInTime`).
-- The Race Predictions page is the earlier prototype's **illustrative demo** with fictional teams. It is clearly labelled and not connected to the historical data.
+- **Race Predictions** uses Jolpica results (features), the FastF1 schedule (upcoming calendar), public RSS (context), Open-Meteo (race-start forecast when within horizon), and OpenF1 qualifying results when available. Win probabilities are softmax estimates from predicted finishing positions, not market odds. Immutable forecast snapshots are stored under `backend/data/processed/prediction/snapshots/`.
+
+### Race Predictions workflow
+
+1. Open **Race Predictions** — only Grands Prix whose main race has **not started** appear.
+2. Choose a stage (pre-qualifying / post-qualifying / pre-race). Post-qualifying and pre-race require completed qualifying (OpenF1 grid when keyed).
+3. **Generate forecast** — uses the cached **champion** model. On first backend start (or empty cache), training runs in the **background** (~2–5 min): walk-forward comparison of HistGBM, ExtraTrees, and XGBoost, then fit on full history. Check `GET /api/v1/predictions/train-status`.
+4. Compare **Forecast history** snapshots for the same event; each records its generation time and cutoff.
+5. **Model evaluation** shows chronological holdout metrics from `/api/v1/predictions/evaluation` (not claimed performance beyond what those tests measure).
+
+Limitations: historical news is not reconstructed for training; RSS grid penalties apply only when headlines match confirmed keyword rules and driver names. Wet-form history uses OpenF1 race weather from 2023+. Weekend pace requires completed FastF1 sessions (downloads on first use). Tyre-deg features use lap-completion proxies, not stint telemetry. Delete `backend/data/processed/prediction/models/` to retrain after feature updates.
 
 ## How the replay works
 
